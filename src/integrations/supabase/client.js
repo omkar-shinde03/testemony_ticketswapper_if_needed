@@ -5,7 +5,25 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = "https://acullerclfdwgdukihzy.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFjdWxsZXJjbGZkd2dkdWtpaHp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0NjM4NjksImV4cCI6MjA2ODAzOTg2OX0.t69o0XNgj2CIWn7jus5hJCMtwgcLLwHasZrOLm3upOQ";
 
+// Validate configuration
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  console.error('Supabase configuration missing. Please check your environment variables.');
+}
+
+console.log('Supabase URL:', SUPABASE_URL);
+console.log('Supabase Key configured:', SUPABASE_PUBLISHABLE_KEY ? 'Yes' : 'No');
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'supabase-js-web'
+    }
+  }
+});

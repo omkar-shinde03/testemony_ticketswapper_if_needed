@@ -11,6 +11,22 @@ export const useHomeData = () => {
       setIsLoading(true);
       setError(null);
       
+      // Test Supabase connection first
+      try {
+        const { data: connectionTest, error: connectionError } = await supabase
+          .from('tickets')
+          .select('count')
+          .limit(1);
+        
+        if (connectionError) {
+          console.error('Supabase connection error:', connectionError);
+          throw new Error(`Database connection failed: ${connectionError.message}`);
+        }
+      } catch (connectionErr) {
+        console.error('Failed to connect to Supabase:', connectionErr);
+        throw new Error('Unable to connect to the database. Please check your internet connection.');
+      }
+      
       // Get current user to exclude their tickets
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -31,13 +47,14 @@ export const useHomeData = () => {
 
       if (error) {
         console.error("Error loading verified tickets:", error);
+        setError(`Failed to load tickets: ${error.message}`);
         setAvailableTickets([]);
       } else {
         setAvailableTickets(ticketData || []);
       }
     } catch (err) {
       console.error('Error loading tickets:', err);
-      setError('Failed to load tickets');
+      setError(err.message || 'Failed to load tickets');
       setAvailableTickets([]);
     } finally {
       setIsLoading(false);
