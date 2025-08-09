@@ -3,8 +3,10 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Lock } from "lucide-react";
 import { handleUserLogin } from "@/utils/authUtils";
+import { isEmailVerified } from "@/utils/emailVerification";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,12 +17,14 @@ const LoginForm = () => {
     emailOrPhone: "",
     password: ""
   });
+  const [showEmailVerificationWarning, setShowEmailVerificationWarning] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setShowEmailVerificationWarning(false);
 
     try {
       const result = await handleUserLogin(loginData.emailOrPhone, loginData.password);
@@ -44,6 +48,18 @@ const LoginForm = () => {
           if (profileData?.user_type === 'admin') {
             navigate("/admin");
           } else {
+            // Check email verification status
+            const emailVerified = await isEmailVerified();
+            
+            if (!emailVerified) {
+              setShowEmailVerificationWarning(true);
+              toast({
+                title: "Email verification required",
+                description: "Please verify your email to access all features.",
+                variant: "destructive",
+              });
+            }
+            
             navigate("/dashboard");
           }
         }
@@ -66,7 +82,28 @@ const LoginForm = () => {
   };
 
   return (
-    <form onSubmit={handleLogin} className="space-y-4">
+    <div className="space-y-4">
+      {/* Email Verification Warning */}
+      {showEmailVerificationWarning && (
+        <Alert className="border-orange-200 bg-orange-50">
+          <AlertCircle className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800">
+            <div className="flex items-center justify-between">
+              <span>Email verification required for full access.</span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigate('/verify-email')}
+                className="ml-2"
+              >
+                Verify Now
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      <form onSubmit={handleLogin} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="login-email-phone">Email or Phone Number</Label>
         <div className="relative">
@@ -107,7 +144,8 @@ const LoginForm = () => {
       >
         {isLoading ? "Signing in..." : "Sign In"}
       </Button>
-    </form>
+      </form>
+    </div>
   );
 };
 

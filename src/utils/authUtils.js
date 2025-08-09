@@ -176,8 +176,26 @@ export const handleUserSignup = async (signupData) => {
  * @returns {Promise<boolean>}
  */
 export const isEmailVerified = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.email_confirmed_at !== null;
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error || !user) {
+      return false;
+    }
+
+    // Check both auth.users.email_confirmed_at and profiles.email_verified
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('email_verified')
+      .eq('id', user.id)
+      .single();
+
+    // Return true if either auth confirmation or profile verification is true
+    return !!(user.email_confirmed_at || profile?.email_verified);
+  } catch (error) {
+    console.error("Error checking email verification:", error);
+    return false;
+  }
 };
 
 /**
@@ -185,11 +203,31 @@ export const isEmailVerified = async () => {
  * @returns {Promise<void>}
  */
 export const sendEmailVerification = async () => {
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-  });
-  
-  if (error) throw error;
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      throw new Error("User not authenticated");
+    }
+
+    // Try Supabase auth resend first
+    const { error: resendError } = await supabase.auth.resend({
+      type: 'signup',
+    });
+
+    if (resendError) {
+      // If Supabase resend fails, use our custom verification system
+      const { sendVerificationEmail } = await import("@/utils/emailVerification");
+      const result = await sendVerificationEmail(true);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    }
+  } catch (error) {
+    console.error("Send email verification error:", error);
+    throw error;
+  }
 };
 
 export { ADMIN_EMAIL, ADMIN_PASSWORD };

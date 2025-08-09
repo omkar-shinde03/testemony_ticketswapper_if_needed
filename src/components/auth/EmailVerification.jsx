@@ -2,9 +2,15 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, ArrowLeft } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Mail, ArrowLeft, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { 
+  sendVerificationEmail, 
+  verifyEmailToken, 
+  resendVerificationEmail,
+  getVerificationStatus 
+} from "@/utils/emailVerification";
 
 const EmailVerification = ({ email, onVerified, onBack }) => {
   const [verificationCode, setVerificationCode] = useState("");
@@ -12,7 +18,13 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
   const [isResending, setIsResending] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [isExpired, setIsExpired] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState(null);
+  const [verificationLogs, setVerificationLogs] = useState([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    loadVerificationStatus();
+  }, []);
 
   useEffect(() => {
     if (countdown > 0) {
@@ -22,6 +34,20 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
       setIsExpired(true);
     }
   }, [countdown]);
+
+  const loadVerificationStatus = async () => {
+    try {
+      const status = await getVerificationStatus();
+      setVerificationStatus(status);
+      setVerificationLogs(status.logs || []);
+      
+      if (status.verified) {
+        onVerified();
+      }
+    } catch (error) {
+      console.error("Error loading verification status:", error);
+    }
+  };
 
   const handleVerifyCode = async (e) => {
     e.preventDefault();
@@ -38,38 +64,10 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email,
-        token: verificationCode,
-        type: 'signup'
-      });
-
-      if (error) throw error;
-
-      // Ensure profile is created after verification
-      if (data.user) {
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profileError && profileError.code === 'PGRST116') {
-          // Profile doesn't exist, create it
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: data.user.id,
-              full_name: data.user.user_metadata?.full_name || null,
-              phone: data.user.user_metadata?.phone || null,
-              user_type: data.user.user_metadata?.user_type || 'user',
-              kyc_status: 'pending'
-            });
-
-          if (insertError) {
-            console.error("Error creating profile:", insertError);
-          }
-        }
+      const result = await verifyEmailToken(email, verificationCode);
+      
+      if (!result.success) {
+        throw new Error(result.error);
       }
 
       toast({
@@ -87,13 +85,15 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
       let errorMessage = "Invalid verification code. Please try again.";
       
       if (error.message) {
-        if (error.message.includes("expired") || error.message.includes("Token has expired")) {
+        if (error.message.includes("expired") || error.message.includes("Invalid or expired token")) {
           errorMessage = "Verification code has expired. Please request a new one.";
           setIsExpired(true);
-        } else if (error.message.includes("invalid") || error.message.includes("Token is invalid")) {
+        } else if (error.message.includes("invalid") || error.message.includes("Invalid")) {
           errorMessage = "Invalid verification code. Please check and try again.";
         } else if (error.message.includes("already been verified")) {
           errorMessage = "This email has already been verified. Please try logging in.";
+        } else {
+          errorMessage = error.message;
         }
       }
       
@@ -111,26 +111,28 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
     setIsResending(true);
     
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-      });
-
-      if (error) throw error;
+      const result = await sendVerificationEmail(true);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
       toast({
         title: "Verification code sent",
-        description: "A new verification code has been sent to your email.",
+        description: result.message,
       });
 
       setCountdown(60);
       setIsExpired(false);
       setVerificationCode("");
+      
+      // Reload verification status
+      loadVerificationStatus();
     } catch (error) {
       console.error("Resend error:", error);
       toast({
         title: "Failed to resend code",
-        description: "Please try again in a moment.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -151,6 +153,26 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
         </p>
       </div>
 
+      {/* Verification Status Alert */}
+      {verificationStatus?.verified && (
+        <Alert className="border-green-200 bg-green-50">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            Your email is already verified! You can proceed to the dashboard.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Rate Limiting Alert */}
+      {verificationLogs.length >= 3 && (
+        <Alert className="border-orange-200 bg-orange-50">
+          <Clock className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800">
+            You've reached the maximum number of verification attempts for this hour. 
+            Please wait before requesting another code.
+          </AlertDescription>
+        </Alert>
+      )}
       <form onSubmit={handleVerifyCode} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="verification-code">Verification Code</Label>
@@ -168,16 +190,19 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
             }}
             maxLength="6"
             required
+            disabled={verificationStatus?.verified}
           />
         </div>
 
         <Button 
           type="submit" 
           className="w-full" 
-          disabled={isLoading || verificationCode.length !== 6 || isExpired}
+          disabled={isLoading || verificationCode.length !== 6 || isExpired || verificationStatus?.verified}
           size="lg"
         >
-          {isLoading ? "Verifying..." : isExpired ? "Code Expired" : "Verify Email"}
+          {isLoading ? "Verifying..." : 
+           verificationStatus?.verified ? "Already Verified" :
+           isExpired ? "Code Expired" : "Verify Email"}
         </Button>
       </form>
 
@@ -193,7 +218,7 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
           ) : (
             <button
               onClick={handleResendCode}
-              disabled={isResending}
+              disabled={isResending || verificationStatus?.verified || verificationLogs.length >= 3}
               className="text-blue-600 hover:underline font-medium"
             >
               {isResending ? "Sending..." : "Resend code"}
@@ -206,11 +231,27 @@ const EmailVerification = ({ email, onVerified, onBack }) => {
           variant="ghost"
           onClick={onBack}
           className="w-full"
+          disabled={verificationStatus?.verified}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to signup
         </Button>
       </div>
+
+      {/* Development Debug Info */}
+      {import.meta.env.DEV && verificationLogs.length > 0 && (
+        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+          <h4 className="text-sm font-medium mb-2">Verification Logs (Dev Only)</h4>
+          <div className="space-y-1">
+            {verificationLogs.slice(0, 5).map((log, index) => (
+              <div key={index} className="text-xs text-gray-600 flex justify-between">
+                <span>{log.action}</span>
+                <span>{new Date(log.created_at).toLocaleTimeString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

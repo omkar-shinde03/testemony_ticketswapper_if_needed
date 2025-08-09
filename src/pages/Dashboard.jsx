@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import QuickSellForm from "@/components/dashboard/QuickSellForm";
 import TicketCard from "@/components/dashboard/TicketCard";
 import { KYCCompletion } from "@/components/dashboard/KYCCompletion";
+import { EmailVerificationBanner } from "@/components/dashboard/EmailVerificationBanner";
 
 import { MessagesList } from "@/components/messaging/MessagesList";
 import { MessagingIntegration } from "@/components/messaging/MessagingIntegration";
@@ -15,6 +16,7 @@ import { useDashboardData } from "@/hooks/useDashboardData";
 import { useToast } from "@/hooks/use-toast";
 import { PaymentSettings } from "@/components/dashboard/PaymentSettings";
 import { PendingPayouts } from "@/components/dashboard/PendingPayouts";
+import { EmailVerificationStatus } from "@/components/dashboard/EmailVerificationStatus";
 
 
 const Dashboard = () => {
@@ -96,6 +98,9 @@ const Dashboard = () => {
         </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Email Verification Banner */}
+        <EmailVerificationBanner />
+        
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-sm border">
@@ -151,6 +156,7 @@ const Dashboard = () => {
             <TabsTrigger value="buy">Buy Tickets</TabsTrigger>
             <TabsTrigger value="my-tickets">My Tickets</TabsTrigger>
             <TabsTrigger value="payments">Payments</TabsTrigger>
+            <TabsTrigger value="verification">Verification</TabsTrigger>
             <TabsTrigger value="messages" className="relative">
               <MessageSquare className="h-4 w-4 mr-2" />
               Messages
@@ -222,6 +228,9 @@ const Dashboard = () => {
             </div>
           </TabsContent>
 
+          <TabsContent value="verification" className="space-y-6">
+            <EmailVerificationStatus />
+          </TabsContent>
           <TabsContent value="messages" className="space-y-6">
             <MessagesList currentUserId={user?.id} />
           </TabsContent>

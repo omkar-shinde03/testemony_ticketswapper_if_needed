@@ -5,9 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, Shield, AlertCircle, CheckCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { isEmailVerified, sendEmailVerification } from "@/utils/authUtils";
+import { 
+  isEmailVerified, 
+  sendVerificationEmail, 
+  verifyEmailToken,
+  getVerificationStatus 
+} from "@/utils/emailVerification";
 
 const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
   const [isVerified, setIsVerified] = useState(null);
@@ -17,6 +21,8 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResending, setIsResending] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [userEmail, setUserEmail] = useState("");
+  const [verificationLogs, setVerificationLogs] = useState([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -32,8 +38,10 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
 
   const checkEmailVerification = async () => {
     try {
-      const verified = await isEmailVerified();
-      setIsVerified(verified);
+      const status = await getVerificationStatus();
+      setIsVerified(status.verified);
+      setUserEmail(status.email || "");
+      setVerificationLogs(status.logs || []);
     } catch (error) {
       console.error("Error checking email verification:", error);
       setIsVerified(false);
@@ -45,10 +53,15 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
   const handleSendVerification = async () => {
     setIsResending(true);
     try {
-      await sendEmailVerification();
+      const result = await sendVerificationEmail(false);
+      
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      
       toast({
         title: "Verification email sent",
-        description: "Please check your email inbox and spam folder.",
+        description: result.message,
       });
       setShowVerification(true);
       setCountdown(60);
@@ -69,18 +82,11 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
     setIsSubmitting(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) {
-        throw new Error("No user email found");
+      const result = await verifyEmailToken(userEmail, verificationCode);
+      
+      if (!result.success) {
+        throw new Error(result.error);
       }
-
-      const { error } = await supabase.auth.verifyOtp({
-        email: user.email,
-        token: verificationCode,
-        type: 'signup'
-      });
-
-      if (error) throw error;
 
       toast({
         title: "Email verified successfully!",
@@ -89,6 +95,9 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
 
       setIsVerified(true);
       setShowVerification(false);
+      
+      // Reload verification status
+      await checkEmailVerification();
     } catch (error) {
       console.error("Verification error:", error);
       toast({
@@ -123,10 +132,20 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
             </div>
             <CardTitle>Verify Your Email</CardTitle>
             <CardDescription>
-              Enter the verification code sent to your email
+              Enter the 6-digit code sent to {userEmail}
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Rate limiting warning */}
+            {verificationLogs.length >= 2 && (
+              <Alert className="mb-4 border-orange-200 bg-orange-50">
+                <AlertCircle className="h-4 w-4 text-orange-600" />
+                <AlertDescription className="text-orange-800">
+                  You have {3 - verificationLogs.length} verification attempts remaining this hour.
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <form onSubmit={handleVerifyCode} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="verification-code">Verification Code</Label>
@@ -163,7 +182,7 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
                 <Button
                   variant="ghost"
                   onClick={handleSendVerification}
-                  disabled={isResending}
+                  disabled={isResending || verificationLogs.length >= 3}
                   className="text-sm"
                 >
                   {isResending ? "Sending..." : "Resend verification code"}

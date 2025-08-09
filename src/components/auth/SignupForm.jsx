@@ -6,12 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Mail, Lock, User, Phone, Shield } from "lucide-react";
 import { handleUserSignup, ADMIN_EMAIL } from "@/utils/authUtils";
+import { sendVerificationEmail } from "@/utils/emailVerification";
 import { useToast } from "@/hooks/use-toast";
 import EmailVerification from "./EmailVerification";
 
 const SignupForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
+  const [signupEmail, setSignupEmail] = useState("");
   const [signupData, setSignupData] = useState({
     email: "",
     password: "",
@@ -53,21 +55,38 @@ const SignupForm = () => {
           title: "Admin account created successfully!",
           description: "You can now log in with your admin credentials.",
         });
-      } else {
-        toast({
-          title: "Account created successfully!",
-          description: "You can now log in. Note: Email verification will be required for buying/selling tickets.",
+        
+        // Reset form
+        setSignupData({
+          email: "",
+          password: "",
+          fullName: "",
+          phone: "",
+          isAdmin: false
         });
+      } else {
+        // For regular users, show email verification
+        setSignupEmail(signupData.email);
+        setShowVerification(true);
+        
+        toast({
+          title: "Account created!",
+          description: "Please check your email for a verification code.",
+        });
+        
+        // Send verification email
+        try {
+          await sendVerificationEmail(false);
+        } catch (emailError) {
+          console.error("Error sending verification email:", emailError);
+          toast({
+            title: "Account created but email not sent",
+            description: "You can request a verification email from the verification page.",
+            variant: "destructive",
+          });
+        }
       }
 
-      // Reset form
-      setSignupData({
-        email: "",
-        password: "",
-        fullName: "",
-        phone: "",
-        isAdmin: false
-      });
     } catch (error) {
       console.error("Signup error:", error);
       
@@ -100,6 +119,7 @@ const SignupForm = () => {
 
   const handleVerificationComplete = () => {
     setShowVerification(false);
+    setSignupEmail("");
     // Reset form
     setSignupData({
       email: "",
@@ -112,12 +132,13 @@ const SignupForm = () => {
 
   const handleBackToSignup = () => {
     setShowVerification(false);
+    setSignupEmail("");
   };
 
   if (showVerification) {
     return (
       <EmailVerification
-        email={signupData.email}
+        email={signupEmail}
         onVerified={handleVerificationComplete}
         onBack={handleBackToSignup}
       />

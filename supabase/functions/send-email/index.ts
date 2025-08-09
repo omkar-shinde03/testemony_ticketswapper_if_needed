@@ -22,9 +22,23 @@ const getEmailTemplate = (template: string, data: Record<string, any>) => {
         subject: 'Verify Your Email - Ticket Marketplace',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #2563eb;">Verify Your Email Address</h2>
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #2563eb; margin-bottom: 10px;">TicketSwapper</h1>
+              <h2 style="color: #374151; margin: 0;">Verify Your Email Address</h2>
+            </div>
             <p>Hello ${data.name || 'User'},</p>
-            <p>Thank you for signing up! Please verify your email address by clicking the button below:</p>
+            <p>${data.isResend ? 'Here is your new verification code:' : 'Thank you for signing up! Here is your verification code:'}</p>
+            
+            <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #f3f4f6; border-radius: 8px;">
+              <div style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #2563eb; font-family: monospace;">
+                ${data.verificationCode}
+              </div>
+              <p style="margin: 10px 0 0 0; color: #6b7280; font-size: 14px;">
+                This code expires in 10 minutes
+              </p>
+            </div>
+            
+            <p>Alternatively, you can click the button below to verify automatically:</p>
             <div style="text-align: center; margin: 30px 0;">
               <a href="${data.verificationUrl}" 
                  style="background-color: #2563eb; color: white; padding: 12px 24px; 
@@ -32,10 +46,54 @@ const getEmailTemplate = (template: string, data: Record<string, any>) => {
                 Verify Email Address
               </a>
             </div>
-            <p>If the button doesn't work, copy and paste this link into your browser:</p>
-            <p>${data.verificationUrl}</p>
-            <p>This link will expire in 24 hours.</p>
+            
+            <div style="background-color: #fef3c7; padding: 15px; border-radius: 6px; margin: 20px 0;">
+              <p style="margin: 0; color: #92400e; font-size: 14px;">
+                <strong>Security Note:</strong> Never share this code with anyone. Our team will never ask for your verification code.
+              </p>
+            </div>
+            
+            <p style="color: #6b7280; font-size: 14px;">
+              If you didn't create an account with us, please ignore this email.
+            </p>
             <p>Best regards,<br>Ticket Marketplace Team</p>
+          </div>
+        `
+      };
+    
+    case 'welcome':
+      return {
+        subject: 'Welcome to TicketSwapper!',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #2563eb; margin-bottom: 10px;">🎉 Welcome to TicketSwapper!</h1>
+            </div>
+            <p>Hello ${data.name},</p>
+            <p>Welcome to India's most trusted bus ticket marketplace! Your email has been verified and your account is now active.</p>
+            
+            <div style="background-color: #f0f9ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="color: #1e40af; margin-top: 0;">What you can do now:</h3>
+              <ul style="color: #1e40af; margin: 10px 0;">
+                <li>🎫 Browse and purchase verified bus tickets</li>
+                <li>💰 List your own tickets for sale</li>
+                <li>💬 Message other users securely</li>
+                <li>🛡️ Complete KYC for enhanced features</li>
+              </ul>
+            </div>
+            
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${data.dashboardUrl}" 
+                 style="background-color: #16a34a; color: white; padding: 12px 24px; 
+                        text-decoration: none; border-radius: 6px; display: inline-block;">
+                Start Using TicketSwapper
+              </a>
+            </div>
+            
+            <p style="color: #6b7280; font-size: 14px;">
+              Need help? Contact us at support@ticketswapper.com
+            </p>
+            <p>Happy travels!<br>The TicketSwapper Team</p>
           </div>
         `
       };
