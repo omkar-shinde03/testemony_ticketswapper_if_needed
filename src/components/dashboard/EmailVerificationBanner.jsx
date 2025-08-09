@@ -26,6 +26,12 @@ export const EmailVerificationBanner = ({ onDismiss }) => {
     if (dismissed) {
       setIsDismissed(true);
     }
+    const onVerified = async () => {
+      await checkVerificationStatus();
+      setIsDismissed(false);
+    };
+    window.addEventListener('email-verified', onVerified);
+    return () => window.removeEventListener('email-verified', onVerified);
   }, []);
 
   const checkVerificationStatus = async () => {

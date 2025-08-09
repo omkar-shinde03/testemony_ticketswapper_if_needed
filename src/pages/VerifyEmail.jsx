@@ -79,6 +79,13 @@ const VerifyEmail = () => {
         description: "Your account has been activated. Redirecting to dashboard...",
       });
 
+      // Broadcast email verified so any listeners can refresh their state immediately
+      try {
+        window.dispatchEvent(new CustomEvent('email-verified'));
+      } catch (_) {
+        // ignore if not in browser
+      }
+
       setTimeout(() => {
         navigate('/dashboard');
       }, 2000);

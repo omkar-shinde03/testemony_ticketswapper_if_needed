@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, AlertCircle, User, CreditCard, Shield } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { getVerificationStatus } from '@/utils/emailVerification';
 import { useToast } from '@/hooks/use-toast';
 
 export const OnboardingChecklist = () => {
@@ -19,9 +20,14 @@ export const OnboardingChecklist = () => {
 
   useEffect(() => {
     loadUserData();
+    const onVerified = async () => {
+      await loadUserData(true);
+    };
+    window.addEventListener('email-verified', onVerified);
+    return () => window.removeEventListener('email-verified', onVerified);
   }, []);
 
-  const loadUserData = async () => {
+  const loadUserData = async (skipSessionRefresh = false) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -36,8 +42,10 @@ export const OnboardingChecklist = () => {
 
       setProfile(profileData);
 
+      const status = await getVerificationStatus();
+
       setChecklist({
-        emailVerified: !!user.email_confirmed_at,
+        emailVerified: !!status.verified,
         profileComplete: !!(profileData?.full_name && profileData?.phone_number),
         kycCompleted: profileData?.kyc_status === 'verified',
         paymentSetup: !!(profileData?.upi_id || profileData?.phone_number)

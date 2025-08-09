@@ -12,7 +12,7 @@ import { TicketGridSkeleton } from "./LoadingStates";
 import { EmptyState } from "./EmptyStates";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import EmailVerificationGuard from "./EmailVerificationGuard";
-import { isEmailVerified } from "@/utils/authUtils";
+import { isEmailVerified } from "@/utils/emailVerification";
 import { sendTransactionNotification } from "@/components/notifications/EnhancedNotificationSystem";
 
 export const AvailableTickets = ({ availableTickets }) => {
@@ -42,6 +42,21 @@ export const AvailableTickets = ({ availableTickets }) => {
       }
     };
     getCurrentUser();
+
+    // Listen for global email-verified event to refresh verification state immediately
+    const handleVerified = async () => {
+      try {
+        const verified = await isEmailVerified();
+        setUserEmailVerified(verified);
+      } catch (err) {
+        console.error('Failed updating email verification state:', err);
+      }
+    };
+    window.addEventListener('email-verified', handleVerified);
+
+    return () => {
+      window.removeEventListener('email-verified', handleVerified);
+    };
   }, [availableTickets]);
 
   const handleTicketAction = async (ticket, action) => {

@@ -95,6 +95,12 @@ const EmailVerificationGuard = ({ children, requiredFor = "this action" }) => {
 
       setIsVerified(true);
       setShowVerification(false);
+      // Notify other components in the app that email verification has completed
+      try {
+        window.dispatchEvent(new CustomEvent('email-verified'));
+      } catch (_) {
+        // no-op if window is unavailable
+      }
       
       // Reload verification status
       await checkEmailVerification();

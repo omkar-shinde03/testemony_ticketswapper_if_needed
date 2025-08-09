@@ -78,12 +78,8 @@ export const useDashboardData = () => {
         return;
       }
 
-      // Check if user's email is verified
-      if (!session.user.email_confirmed_at) {
-        console.log("Email not verified, redirecting to auth");
-        navigate("/auth");
-        return;
-      }
+      // Allow access even if email is not yet confirmed.
+      // Buying/selling is gated separately by EmailVerificationGuard and purchase checks.
 
       // Check user type and redirect admins to admin dashboard
       const { data: profileData, error: profileError } = await supabase
