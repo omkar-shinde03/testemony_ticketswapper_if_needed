@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -13,7 +15,12 @@ export const RazorpayEscrowPayment = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
-  const useMockPayments = (import.meta?.env?.VITE_MOCK_PAYMENTS === 'true') || import.meta?.env?.DEV;
+  const useMockPayments = (import.meta?.env?.VITE_MOCK_PAYMENTS === 'true');
+  const [showMockForm, setShowMockForm] = useState(false);
+  const [mockCardNumber, setMockCardNumber] = useState('');
+  const [mockExpiry, setMockExpiry] = useState(''); // MM/YY or MM/YYYY
+  const [mockCvv, setMockCvv] = useState('');
+  const [mockUpi, setMockUpi] = useState('');
 
   const runMockPayment = async () => {
     try {
@@ -46,6 +53,41 @@ export const RazorpayEscrowPayment = ({
     }
   };
 
+  const isFutureExpiry = (value) => {
+    // Accept MM/YY or MM/YYYY
+    const match = value.match(/^\s*(\d{2})\s*\/\s*(\d{2}(\d{2})?)\s*$/);
+    if (!match) return false;
+    const mm = parseInt(match[1], 10);
+    let yy = match[2].length === 2 ? 2000 + parseInt(match[2], 10) : parseInt(match[2], 10);
+    if (mm < 1 || mm > 12) return false;
+    const now = new Date();
+    const exp = new Date(yy, mm - 1, 1);
+    // set to end of month
+    exp.setMonth(exp.getMonth() + 1);
+    return exp > now;
+  };
+
+  const handleMockSubmit = async () => {
+    // Allowed test paths: Card 4111111111111111 or 5555555555554444, valid expiry, 3-digit CVV
+    // Or UPI success@upi
+    const normalizedCard = mockCardNumber.replace(/\s|-/g, '');
+    const cardOk = (normalizedCard === '4111111111111111' || normalizedCard === '5555555555554444')
+      && isFutureExpiry(mockExpiry)
+      && /^\d{3,4}$/.test(mockCvv);
+    const upiOk = mockUpi.trim().toLowerCase() === 'success@upi' || mockUpi.trim().toLowerCase() === 'success@razorpay';
+
+    if (!cardOk && !upiOk) {
+      toast({
+        title: 'Mock payment failed',
+        description: 'Use card 4111111111111111 (any future expiry, any 3-4 digit CVV) or UPI success@upi',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setIsProcessing(true);
+    await runMockPayment();
+  };
+
   const handlePayment = async () => {
     setIsProcessing(true);
 
@@ -57,9 +99,11 @@ export const RazorpayEscrowPayment = ({
         throw new Error("User not authenticated");
       }
 
-      // If mock payments enabled, short-circuit into mock flow
+      // If mock payments enabled, show mock form and short-circuit
       if (useMockPayments) {
-        return await runMockPayment();
+        setShowMockForm(true);
+        setIsProcessing(false);
+        return;
       }
 
       // Calculate commission (5% of selling price)
@@ -84,7 +128,9 @@ export const RazorpayEscrowPayment = ({
       if (orderError || !orderData) {
         // Fall back to mock if backend function is unavailable
         console.warn('Falling back to mock payment due to order creation failure:', orderError || 'No data');
-        return await runMockPayment();
+        setShowMockForm(true);
+        setIsProcessing(false);
+        return;
       }
 
       // Load Razorpay script
@@ -117,9 +163,11 @@ export const RazorpayEscrowPayment = ({
               );
 
               if (verifyError) {
-                // If verification fails, fall back to mock success to allow testing
-                console.warn('Verification failed – using mock completion for testing:', verifyError);
-                return await runMockPayment();
+                // If verification fails, allow manual mock
+                console.warn('Verification failed – enabling mock payment UI for testing:', verifyError);
+                setShowMockForm(true);
+                setIsProcessing(false);
+                return;
               }
 
               toast({
@@ -214,33 +262,49 @@ export const RazorpayEscrowPayment = ({
             </p>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              disabled={isProcessing}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePayment}
-              disabled={isProcessing}
-              className="flex-1"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader className="h-4 w-4 animate-spin mr-2" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Pay ₹{ticket.selling_price}
-                </>
-              )}
-            </Button>
-          </div>
+          {/* Mock payment UI (visible when mock mode or fallback is active) */}
+          {showMockForm ? (
+            <div className="space-y-4 border rounded-lg p-4">
+              <div className="text-sm text-muted-foreground">Test Mode Payment</div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <Label htmlFor="mock-card">Card Number (Test)</Label>
+                  <Input id="mock-card" placeholder="4111 1111 1111 1111" value={mockCardNumber} onChange={(e) => setMockCardNumber(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="mock-exp">Expiry (MM/YY)</Label>
+                    <Input id="mock-exp" placeholder="12/29" value={mockExpiry} onChange={(e) => setMockExpiry(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="mock-cvv">CVV</Label>
+                    <Input id="mock-cvv" placeholder="123" value={mockCvv} onChange={(e) => setMockCvv(e.target.value)} />
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <Label htmlFor="mock-upi">Or UPI ID (Test)</Label>
+                  <Input id="mock-upi" placeholder="success@upi" value={mockUpi} onChange={(e) => setMockUpi(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={onClose} disabled={isProcessing} className="flex-1">Cancel</Button>
+                <Button onClick={handleMockSubmit} disabled={isProcessing} className="flex-1">
+                  {isProcessing ? (<><Loader className="h-4 w-4 animate-spin mr-2" />Processing...</>) : (<>Pay (Test) ₹{ticket.selling_price}</>)}
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Use card 4111 1111 1111 1111 with any future expiry and any 3-4 digit CVV, or UPI success@upi.
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose} disabled={isProcessing} className="flex-1">Cancel</Button>
+              <Button onClick={handlePayment} disabled={isProcessing} className="flex-1">
+                {isProcessing ? (<><Loader className="h-4 w-4 animate-spin mr-2" />Processing...</>) : (<><CreditCard className="h-4 w-4 mr-2" />Pay ₹{ticket.selling_price}</>)}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
