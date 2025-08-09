@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { CompletePurchaseFlow } from './CompletePurchaseFlow';
 import { CreditCard, Loader, ShieldCheck } from 'lucide-react';
+import { isEmailVerified } from '@/utils/emailVerification';
 
 export const QuickPurchaseButton = ({ 
   ticket, 
@@ -34,7 +35,7 @@ export const QuickPurchaseButton = ({
       }
 
       // Check if user owns this ticket
-      if (ticket.user_id === user.id) {
+      if ((ticket.user_id && ticket.user_id === user.id) || (ticket.seller_id && ticket.seller_id === user.id)) {
         toast({
           title: "Cannot Purchase",
           description: "You cannot purchase your own ticket",
@@ -61,14 +62,10 @@ export const QuickPurchaseButton = ({
         return;
       }
 
-      // Check email verification
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('email_verified')
-        .eq('id', user.id)
-        .single();
+      // Check email verification using centralized helper (auth.users OR profiles)
+      const verified = await isEmailVerified();
 
-      if (profileError || !profile.email_verified) {
+      if (!verified) {
         toast({
           title: "Email Verification Required",
           description: "Please verify your email before purchasing tickets",
